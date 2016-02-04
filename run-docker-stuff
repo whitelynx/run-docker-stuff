@@ -1,0 +1,161 @@
+#!/bin/bash
+APP_PATH="$(realpath "$0")"
+#APP_NAME=run-docker-stuff
+APP_NAME="$(basename "$APP_PATH")"
+
+function help() {
+	cat - >/dev/stderr <<-EOF
+		Usage:  $(basename "$0") [OPTIONS]
+
+		Run a configured command using the a Docker image.
+
+		Options:
+
+		  -h|--help                          Show this help message
+		  -l|--list-aliases                  Display all configured aliases
+		  --add-alias ALIAS="IMAGE COMMAND"  Add a new alias to the configuration
+		  --link-aliases                     Create symlinks for all configured aliases
+	EOF
+	exit 1
+}
+
+[[ -n "$XDG_CONFIG_HOME" ]] || XDG_CONFIG_HOME=$HOME/.config
+[[ -n "$XDG_CACHE_HOME" ]] || XDG_CACHE_HOME=$HOME/.cache
+
+CONFIG_DIR="$XDG_CONFIG_HOME/$APP_NAME"
+CACHE_DIR="$XDG_CONFIG_HOME/$APP_NAME"
+
+mkdir -p "$CONFIG_DIR" "$CACHE_DIR"
+
+CONFIG_FILE="$CONFIG_DIR/rdsrc"
+if [[ ! -e "$CONFIG_FILE" ]]; then
+	echo "Config file $CONFIG_FILE does not exist; creating." >/dev/stderr
+	cat - >"$CONFIG_FILE" <<-"EOF"
+		# Configuration file for $APP_NAME
+		#
+		# Each line configures one recognized alias.
+		#
+		# In order to actually be able to run the configured aliases, you'll need to
+		# make symlinks somewhere on your \$PATH:
+		#   ln -s /path/to/$APP_NAME /my/path/node-0.10
+		#
+		# Alternatively, you can have $APP_NAME do it for you:
+		#   $APP_NAME --link-aliases
+
+		# alias docker-image command
+		node:0.10 node:0.10 node
+		npm:0.10 node:0.10 npm
+		node:0.12 node:0.12 node
+		npm:0.12 node:0.12 npm
+		node:4 node:4 node
+		npm:4 node:4 npm
+		node:5 node:5 node
+		npm:5 node:5 npm
+	EOF
+fi
+
+ALIAS="$(basename "$0")"
+SANITIZED_ALIAS=$(echo -n "$ALIAS" | sed 's/[^a-zA-Z0-9_.-]/_/g')
+
+if [[ "$ALIAS" == "$APP_NAME" ]]; then
+	[[ "$#" -eq 0 ]] && help
+	while [[ "$#" -gt 0 ]]; do
+		case "$1" in
+			-h|--help) help ;;
+
+			-l|--list-aliases)
+				awk -v alias="$(tput setaf 2)" -v string="$(tput setaf 6)" -v reset="$(tput sgr0)" -v column2="$(tput hpa 15)" '{sub(/\s*#.*$/, "")}; /^$/ {next}; {print alias $1 reset ":" column2 "image: " string $2 reset "; command: " string $3 reset}' "$CONFIG_FILE"
+				exit 0
+				;;
+
+			--add-alias)
+				shift
+				alias="${1#*=}"
+				rest="${1%%=*}"
+				echo "$alias $rest" >> "$CONFIG_FILE"
+				;;
+
+			--link-aliases)
+				while read pathElem; do
+					[[ -d "$pathElem" && -w "$pathElem" ]] && writable_path_dir="$pathElem"
+				done < <(echo "$PATH" | tr ':' '\n')
+				if [[ -z "$writable_path_dir" ]]; then
+					echo "ERROR: Couldn't find writable directory in \$PATH! Can't symlink aliases." >/dev/stderr
+					exit 1
+				fi
+				echo "Symlinking aliases into ${writable_path_dir}..."
+				while read alias; do
+					target="$writable_path_dir/$alias"
+					if [[ -e "$target" ]]; then
+						if [[ -L "$target" && "$(readlink "$target")" == "$APP_PATH" ]]; then
+							echo "Symlink already exists for alias \"$alias\" at $target; skipping."
+						else
+							echo "ERROR: Symlink already exists at $target, but doesn't point to $APP_NAME! Can't link alias \"$alias\"." >/dev/stderr
+						fi
+					else
+						ln -sv "$APP_PATH" "$target"
+					fi
+				done < <(awk '{sub(/\s*#.*$/, "")}; /^$/ {next}; {print $1}' "$CONFIG_FILE")
+				;;
+		esac
+		shift
+	done
+	exit 0
+else
+	read IMAGE COMMAND < <(awk -v alias="$ALIAS" '{sub(/\s*#.*$/, "")}; /^$/ {next}; $1 == alias {print $2 " " $3}' "$CONFIG_FILE")
+
+	if [[ -z "$IMAGE" && -z "$COMMAND" ]]; then
+		echo "ERROR: Unrecognized alias \"$ALIAS\"!" >/dev/stderr
+		exit 1
+	elif [[ -z "$IMAGE" || -z "$COMMAND" ]]; then
+		echo "ERROR: Couldn't read configuration for alias \"$ALIAS\"!" >/dev/stderr
+		exit 1
+	fi
+fi
+
+if [[ -z "$ALIAS" ]]; then
+	[[ "$#" -eq 0 ]] && help
+fi
+
+
+container_name="$(basename "$PWD" | sed 's/[^a-zA-Z0-9_.-]/_/g')_${SANITIZED_ALIAS}_$$"
+
+CACHED_PASSWD_FILE="$CACHE_DIR/${IMAGE}.passwd"
+if [[ ! -e "$CACHED_PASSWD_FILE" ]]; then
+	docker run -it --rm --name "$container_name" "${docker_run_args[@]}" "$IMAGE" cat /etc/passwd >"$CACHED_PASSWD_FILE"
+fi
+
+
+parsed_options="$(getopt -n "$ALIAS" -o a:de:h:il:m:Pp:tu:v:w: --long attach,add-host,blkio-weight,cpu-shares,cap-add,cap-drop,cgroup-parent,cidfile,cpu-period,cpu-quota,cpuset-cpus,cpuset-mems,detach:,device,disable-content-trust:,dns,dns-opt,dns-search,env,entrypoint,env-file,expose,group-add,hostname,help:,interactive:,ipc,kernel-memory,label,label-file,link,log-driver,log-opt,lxc-conf,memory,mac-address,memory-reservation,memory-swap,memory-swappiness,name,net,oom-kill-disable:,publish-all:,publish,pid,privileged:,read-only:,restart,rm:,security-opt,sig-proxy:,stop-signal,tty:,user,ulimit,uts,volume,volume-driver,volumes-from,workdir -- "$@")" || exit
+eval "set -- $parsed_options"
+
+declare -a docker_run_args
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+		--) shift; break ;;
+		*) docker_run_args=("${docker_run_args[@]}" "$1")
+	esac
+	shift
+done
+
+username="$(awk -F: '$3 == '"$EUID"'{print $1}' /etc/passwd)"
+
+temp_passwd="$(mktemp --tmpdir=/tmp "${SANITIZED_ALIAS}-passwd.XXXXXXXX")"
+trap 'rm "$temp_passwd"' EXIT
+
+cat "$CACHED_PASSWD_FILE" >"$temp_passwd"
+echo "$username:x:$EUID:100:,,,:/tmp/$username:/bin/bash" >>"$temp_passwd"
+
+if [[ "$*" == "-h" || "$*" == "--help" ]]; then
+	cat - >/dev/stderr <<-EOF
+		Usage:  $(basename "$0") [ARG...]
+
+		Run $COMMAND using the $IMAGE Docker image.
+		(this is a configured alias of \`$APP_NAME\`)
+
+		See $CONFIG_FILE for more information.
+	EOF
+	# We don't exit here, because we want to pass the `--help` flag through to the configured command.
+fi
+
+exec docker run -it --rm --name "$container_name" "${docker_run_args[@]}" -v "$temp_passwd":/etc/passwd:ro -v "$PWD":"$PWD":rw -w "$PWD" -u "$EUID" "$IMAGE" "$COMMAND" "$@"
