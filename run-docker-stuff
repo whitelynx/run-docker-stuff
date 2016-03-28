@@ -122,6 +122,9 @@ container_name="$(basename "$PWD" | sed 's/[^a-zA-Z0-9_.-]/_/g')_${SANITIZED_ALI
 
 CACHED_PASSWD_FILE="$CACHE_DIR/${IMAGE}.passwd"
 if [[ ! -e "$CACHED_PASSWD_FILE" ]]; then
+	if [[ "${IMAGE}" =~ / ]]; then
+		mkdir -p "$(dirname "${CACHED_PASSWD_FILE}")"
+	fi
 	docker run -it --rm --name "$container_name" "${docker_run_args[@]}" "$IMAGE" cat /etc/passwd >"$CACHED_PASSWD_FILE"
 fi
 
