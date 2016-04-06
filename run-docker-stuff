@@ -70,8 +70,8 @@ if [[ "$ALIAS" == "$APP_NAME" ]]; then
 
 			--add-alias)
 				shift
-				alias="${1#*=}"
-				rest="${1%%=*}"
+				alias="${1%%=*}"
+				rest="${1#*=}"
 				echo "$alias $rest" >> "$CONFIG_FILE"
 				;;
 
