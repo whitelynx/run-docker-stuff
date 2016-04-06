@@ -129,7 +129,7 @@ if [[ ! -e "$CACHED_PASSWD_FILE" ]]; then
 fi
 
 
-parsed_options="$(getopt -n "$ALIAS" -o a:de:h:il:m:Pp:tu:v:w: --long attach,add-host,blkio-weight,cpu-shares,cap-add,cap-drop,cgroup-parent,cidfile,cpu-period,cpu-quota,cpuset-cpus,cpuset-mems,detach:,device,disable-content-trust:,dns,dns-opt,dns-search,env,entrypoint,env-file,expose,group-add,hostname,help:,interactive:,ipc,kernel-memory,label,label-file,link,log-driver,log-opt,lxc-conf,memory,mac-address,memory-reservation,memory-swap,memory-swappiness,name,net,oom-kill-disable:,publish-all:,publish,pid,privileged:,read-only:,restart,rm:,security-opt,sig-proxy:,stop-signal,tty:,user,ulimit,uts,volume,volume-driver,volumes-from,workdir -- "$@")" || exit
+parsed_options="$(getopt -n "$ALIAS" -o a:de:h:il:m:Pp:tu:v:w: --longoptions attach:,add-host:,blkio-weight:,cpu-shares:,cap-add:,cap-drop:,cgroup-parent:,cidfile:,cpu-period:,cpu-quota:,cpuset-cpus:,cpuset-mems:,detach,device:,disable-content-trust:,dns:,dns-opt:,dns-search:,env:,entrypoint:,env-file:,expose:,group-add:,hostname:,help,interactive,ipc:,kernel-memory:,label:,label-file:,link:,log-driver:,log-opt:,lxc-conf:,memory:,mac-address:,memory-reservation:,memory-swap:,memory-swappiness:,name:,net:,oom-kill-disable,publish-all,publish:,pid:,privileged,read-only,restart:,rm,security-opt:,sig-proxy:,stop-signal:,tty,user:,ulimit:,uts:,volume:,volume-driver:,volumes-from:,workdir: -- "$@")" || exit
 eval "set -- $parsed_options"
 
 declare -a docker_run_args
