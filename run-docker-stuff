@@ -124,11 +124,13 @@ container_name="$(basename "$PWD" | sed 's/[^a-zA-Z0-9_.-]/_/g')_${SANITIZED_ALI
 parsed_options="$(getopt -n "$ALIAS" -o a:de:h:il:m:Pp:tu:v:w: --longoptions attach:,add-host:,blkio-weight:,cpu-shares:,cap-add:,cap-drop:,cgroup-parent:,cidfile:,cpu-period:,cpu-quota:,cpuset-cpus:,cpuset-mems:,detach,device:,disable-content-trust:,dns:,dns-opt:,dns-search:,env:,entrypoint:,env-file:,expose:,group-add:,hostname:,help,interactive,ipc:,kernel-memory:,label:,label-file:,link:,log-driver:,log-opt:,lxc-conf:,memory:,mac-address:,memory-reservation:,memory-swap:,memory-swappiness:,name:,net:,oom-kill-disable,publish-all,publish:,pid:,privileged,read-only,restart:,rm,security-opt:,sig-proxy:,stop-signal:,tty,user:,ulimit:,uts:,volume:,volume-driver:,volumes-from:,workdir: -- "$@")" || exit
 eval "set -- $parsed_options"
 
+show_help=false
 declare -a docker_run_args
 while [ "$#" -gt 0 ]; do
 	case "$1" in
 		--) shift; break ;;
-		*) docker_run_args=("${docker_run_args[@]}" "$1")
+		--help) show_help=true; docker_run_args=("${docker_run_args[@]}" "$1") ;;
+		*) docker_run_args=("${docker_run_args[@]}" "$1") ;;
 	esac
 	shift
 done
@@ -149,7 +151,7 @@ trap 'rm "$temp_passwd"' EXIT
 cat "$CACHED_PASSWD_FILE" >"$temp_passwd"
 echo "$username:x:$EUID:100:,,,:/tmp/$username:/bin/bash" >>"$temp_passwd"
 
-if [[ "$*" == "-h" || "$*" == "--help" ]]; then
+if $show_help; then
 	cat - >/dev/stderr <<-EOF
 		Usage:  $(basename "$0") [ARG...]
 
