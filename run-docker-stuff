@@ -120,14 +120,6 @@ fi
 
 container_name="$(basename "$PWD" | sed 's/[^a-zA-Z0-9_.-]/_/g')_${SANITIZED_ALIAS}_$$"
 
-CACHED_PASSWD_FILE="$CACHE_DIR/${IMAGE}.passwd"
-if [[ ! -e "$CACHED_PASSWD_FILE" ]]; then
-	if [[ "${IMAGE}" =~ / ]]; then
-		mkdir -p "$(dirname "${CACHED_PASSWD_FILE}")"
-	fi
-	docker run -it --rm --name "$container_name" "${docker_run_args[@]}" "$IMAGE" cat /etc/passwd >"$CACHED_PASSWD_FILE"
-fi
-
 
 parsed_options="$(getopt -n "$ALIAS" -o a:de:h:il:m:Pp:tu:v:w: --longoptions attach:,add-host:,blkio-weight:,cpu-shares:,cap-add:,cap-drop:,cgroup-parent:,cidfile:,cpu-period:,cpu-quota:,cpuset-cpus:,cpuset-mems:,detach,device:,disable-content-trust:,dns:,dns-opt:,dns-search:,env:,entrypoint:,env-file:,expose:,group-add:,hostname:,help,interactive,ipc:,kernel-memory:,label:,label-file:,link:,log-driver:,log-opt:,lxc-conf:,memory:,mac-address:,memory-reservation:,memory-swap:,memory-swappiness:,name:,net:,oom-kill-disable,publish-all,publish:,pid:,privileged,read-only,restart:,rm,security-opt:,sig-proxy:,stop-signal:,tty,user:,ulimit:,uts:,volume:,volume-driver:,volumes-from:,workdir: -- "$@")" || exit
 eval "set -- $parsed_options"
@@ -140,6 +132,14 @@ while [ "$#" -gt 0 ]; do
 	esac
 	shift
 done
+
+CACHED_PASSWD_FILE="$CACHE_DIR/${IMAGE}.passwd"
+if [[ ! -e "$CACHED_PASSWD_FILE" ]]; then
+	if [[ "${IMAGE}" =~ / ]]; then
+		mkdir -p "$(dirname "${CACHED_PASSWD_FILE}")"
+	fi
+	docker run -it --rm --name "$container_name" "${docker_run_args[@]}" "$IMAGE" cat /etc/passwd >"$CACHED_PASSWD_FILE"
+fi
 
 username="$(awk -F: '$3 == '"$EUID"'{print $1}' /etc/passwd)"
 
